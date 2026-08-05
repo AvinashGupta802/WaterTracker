@@ -12,6 +12,7 @@ val keyProperties = Properties()
 if (keyPropertiesFile.exists()) {
     keyProperties.load(FileInputStream(keyPropertiesFile))
 }
+val hasReleaseSigning = keyPropertiesFile.exists()
 
 android {
     namespace = "com.ishaansharma.hydrate_yourself"
@@ -36,19 +37,23 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            keyAlias = keyProperties["keyAlias"] as String
-            keyPassword = keyProperties["keyPassword"] as String
-            storeFile = keyProperties["storeFile"]?.let {
-                file(it)
+        if (hasReleaseSigning) {
+            create("release") {
+                keyAlias = keyProperties["keyAlias"] as String
+                keyPassword = keyProperties["keyPassword"] as String
+                storeFile = keyProperties["storeFile"]?.let {
+                    file(it)
+                }
+                storePassword = keyProperties["storePassword"] as String
             }
-            storePassword = keyProperties["storePassword"] as String
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

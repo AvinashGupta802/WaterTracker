@@ -86,6 +86,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ref.invalidate(todayOverrideNotifierProvider);
         ref.read(goalPreviouslyAchievedProvider.notifier).state = false;
       }
+      final processedNotificationIntakes =
+          await NotificationService().processPendingNotificationIntakes();
+      if (processedNotificationIntakes > 0) {
+        ref.invalidate(todayTotalMlProvider);
+        ref.invalidate(todaySummaryProvider);
+        ref.invalidate(lastLogProvider);
+      }
       await NotificationService().dismissActiveNotifications();
     }
   }

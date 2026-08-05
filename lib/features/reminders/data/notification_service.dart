@@ -1,16 +1,24 @@
-import 'package:flutter/foundation.dart';
+import 'dart:ui';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../../core/constants/app_constants.dart';
+import '../../../database/app_database.dart';
+
 // Fires when a notification is tapped while the app is fully terminated.
-// Must be a top-level function (not a class method) since
-// @pragma('vm:entry-point') functions cannot be class methods.
+// Must be a top-level function since the plugin invokes it in a background
+// isolate when notification actions are selected.
 @pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse details) {
-  // App will be launched by the tap — active notifications will be
-  // dismissed by the foreground handler on resume. No additional
-  // action needed here for now.
+Future<void> notificationTapBackground(NotificationResponse details) async {
+  DartPluginRegistrant.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().handleNotificationResponse(details);
 }
 
 class NotificationService {
@@ -23,10 +31,15 @@ class NotificationService {
 
   static const String _soundChannelId = 'water_reminders_v2';
   static const String _silentChannelId = 'water_reminders_silent';
+  static const String _quickAdd250ActionId = 'add_250_ml';
+  static const String _pendingQuickAddCountKey =
+      'pending_notification_add_250_count';
+  static const double _quickAddAmountMl = 250;
 
   Future<void> initialize() async {
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/launcher_icon');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/launcher_icon',
+    );
     const iosSettings = DarwinInitializationSettings();
 
     const settings = InitializationSettings(
@@ -36,14 +49,14 @@ class NotificationService {
 
     await _plugin.initialize(
       settings,
-      onDidReceiveNotificationResponse: (details) async {
-        await dismissActiveNotifications();
-      },
+      onDidReceiveNotificationResponse: handleNotificationResponse,
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await android?.createNotificationChannel(
       const AndroidNotificationChannel(
         _soundChannelId,
@@ -66,6 +79,31 @@ class NotificationService {
     );
   }
 
+  Future<void> handleNotificationResponse(NotificationResponse details) async {
+    if (details.actionId == _quickAdd250ActionId) {
+      await _queueQuickIntakeFromNotification();
+      return;
+    }
+
+    await dismissActiveNotifications();
+  }
+
+  Future<void> showTestReminderNow({required bool soundEnabled}) async {
+    await _ensureLocalTimezone();
+    await initialize();
+
+    final progress = await _loadTodayProgress();
+    await _plugin.show(
+      90,
+      progress.title,
+      progress.body,
+      _buildNotificationDetails(
+        soundEnabled: soundEnabled,
+        progressPercent: progress.percent,
+      ),
+    );
+  }
+
   Future<bool> requestPermissions() async {
     final status = await Permission.notification.status;
     if (status.isDenied) {
@@ -80,12 +118,14 @@ class NotificationService {
   }
 
   /// Dismisses only the notifications currently visible in the shade.
-  /// getActiveNotifications() returns just what's visible right now —
-  /// not the future scheduled alarms — so cancelling by id here leaves
-  /// the recurring AlarmManager entries completely intact.
+  /// getActiveNotifications() returns just what's visible right now, not the
+  /// future scheduled alarms, so cancelling by id here leaves recurring
+  /// AlarmManager entries intact.
   Future<void> dismissActiveNotifications() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (android == null) return;
 
     final active = await android.getActiveNotifications();
@@ -97,17 +137,16 @@ class NotificationService {
   }
 
   Future<bool> isExactAlarmPermissionGranted() async {
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     return await androidPlugin?.canScheduleExactNotifications() ?? false;
   }
 
   /// Cancels all pending reminders, then registers one notification per
-  /// interval slot between wake and sleep, each using
-  /// [DateTimeComponents.time] so the OS repeats it at that same
-  /// time every day indefinitely. No rolling horizon and no further
-  /// Dart-side rescheduling is needed until wake/sleep/interval/sound
-  /// actually change.
+  /// interval slot between wake and sleep, each using [DateTimeComponents.time]
+  /// so the OS repeats it at that same time every day indefinitely.
   Future<void> scheduleReminders({
     required int wakeHour,
     required int wakeMinute,
@@ -119,13 +158,17 @@ class NotificationService {
   }) async {
     int notificationId = 100;
     try {
+      await _ensureLocalTimezone();
+
       if (!notificationsEnabled || intervalMinutes == 0) {
         await _plugin.cancelAll();
         return;
       }
 
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       final canScheduleExact =
           await androidPlugin?.canScheduleExactNotifications() ?? false;
       final scheduleMode = canScheduleExact
@@ -134,24 +177,28 @@ class NotificationService {
 
       await _plugin.cancelAll();
 
-      final channelId = soundEnabled ? _soundChannelId : _silentChannelId;
-      final channelName =
-          soundEnabled ? 'Water Reminders' : 'Water Reminders (Silent)';
+      final progress = await _loadTodayProgress();
+      final notificationDetails = _buildNotificationDetails(
+        soundEnabled: soundEnabled,
+        progressPercent: progress.percent,
+      );
 
       final now = tz.TZDateTime.now(tz.local);
 
-      // If sleep time, read as a plain time-of-day, falls at or
-      // before wake time, the user's bedtime is after midnight
-      // relative to their wake time (e.g. wake 6:00am, sleep
-      // 12:00am/1:00am/2:00am) — so the sleep boundary belongs
-      // to the calendar day AFTER wake's date, not the same one.
+      // If sleep time, read as a plain time-of-day, falls at or before wake
+      // time, bedtime is after midnight relative to wake time.
       final wakeMinutesOfDay = wakeHour * 60 + wakeMinute;
       final sleepMinutesOfDay = sleepHour * 60 + sleepMinute;
       final sleepCrossesMidnight = sleepMinutesOfDay <= wakeMinutesOfDay;
 
-      // First slot is wake + interval, not wake itself
+      // First slot is wake + interval, not wake itself.
       var slotTime = tz.TZDateTime(
-        tz.local, now.year, now.month, now.day, wakeHour, wakeMinute,
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        wakeHour,
+        wakeMinute,
       ).add(Duration(minutes: intervalMinutes));
 
       final sleepDate = sleepCrossesMidnight
@@ -159,36 +206,21 @@ class NotificationService {
           : now;
 
       final sleepTime = tz.TZDateTime(
-        tz.local, sleepDate.year, sleepDate.month, sleepDate.day,
-        sleepHour, sleepMinute,
+        tz.local,
+        sleepDate.year,
+        sleepDate.month,
+        sleepDate.day,
+        sleepHour,
+        sleepMinute,
       );
 
-      // The date part of slotTime only matters for ordering slots
-      // against sleepTime below — matchDateTimeComponents.time makes
-      // each registration recur daily at this time-of-day, rolling
-      // forward to the next occurrence automatically if it's already
-      // passed today.
       while (slotTime.isBefore(sleepTime)) {
         await _plugin.zonedSchedule(
           notificationId,
-          'Time to hydrate! 💧',
-          'Stay on track with your water goal today.',
+          progress.title,
+          progress.body,
           slotTime,
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              channelId,
-              channelName,
-              channelDescription: 'Hydration reminders throughout the day',
-              importance: soundEnabled ? Importance.high : Importance.low,
-              priority: soundEnabled ? Priority.high : Priority.low,
-              playSound: soundEnabled,
-              sound: soundEnabled
-                  ? const RawResourceAndroidNotificationSound('water_pour')
-                  : null,
-              enableVibration: soundEnabled,
-              icon: '@mipmap/launcher_icon',
-            ),
-          ),
+          notificationDetails,
           androidScheduleMode: scheduleMode,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
@@ -203,4 +235,219 @@ class NotificationService {
     }
   }
 
+  NotificationDetails _buildNotificationDetails({
+    required bool soundEnabled,
+    required int progressPercent,
+  }) {
+    final channelId = soundEnabled ? _soundChannelId : _silentChannelId;
+    final channelName = soundEnabled
+        ? 'Water Reminders'
+        : 'Water Reminders (Silent)';
+
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: 'Hydration reminders throughout the day',
+        importance: soundEnabled ? Importance.high : Importance.low,
+        priority: soundEnabled ? Priority.high : Priority.low,
+        playSound: soundEnabled,
+        sound: soundEnabled
+            ? const RawResourceAndroidNotificationSound('water_pour')
+            : null,
+        enableVibration: soundEnabled,
+        icon: '@mipmap/launcher_icon',
+        showProgress: true,
+        maxProgress: 100,
+        progress: progressPercent.clamp(0, 100),
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            _quickAdd250ActionId,
+            '+250 ml',
+            showsUserInterface: false,
+            cancelNotification: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _queueQuickIntakeFromNotification() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pendingCount = prefs.getInt(_pendingQuickAddCountKey) ?? 0;
+    await prefs.setInt(_pendingQuickAddCountKey, pendingCount + 1);
+    await processPendingNotificationIntakes();
+  }
+
+  Future<int> processPendingNotificationIntakes() async {
+    await _ensureLocalTimezone();
+
+    final prefs = await SharedPreferences.getInstance();
+    final pendingCount = prefs.getInt(_pendingQuickAddCountKey) ?? 0;
+    if (pendingCount <= 0) return 0;
+
+    _ReminderSchedule? schedule;
+    final db = AppDatabase();
+    try {
+      var drinkTypes = await db.drinkTypesDao.getAllDrinkTypes();
+      if (drinkTypes.isEmpty) {
+        await db.drinkTypesDao.resetToDefaults();
+        drinkTypes = await db.drinkTypesDao.getAllDrinkTypes();
+      }
+
+      if (drinkTypes.isEmpty) return 0;
+
+      final drinkType = drinkTypes.firstWhere(
+        (type) => type.name.toLowerCase() == 'water',
+        orElse: () => drinkTypes.first,
+      );
+
+      final now = DateTime.now();
+      for (var i = 0; i < pendingCount; i++) {
+        await db.waterLogsDao.insertLog(
+          WaterLogsCompanion.insert(
+            loggedAt: now.add(Duration(milliseconds: i)),
+            amountMl: _quickAddAmountMl,
+            drinkTypeId: drinkType.id,
+          ),
+        );
+      }
+
+      await prefs.remove(_pendingQuickAddCountKey);
+      await prefs.setInt(
+        AppConstants.prefLastCupSizeMl,
+        _quickAddAmountMl.round(),
+      );
+      await prefs.setInt(AppConstants.prefLastDrinkTypeId, drinkType.id);
+
+      final profile = await db.userProfileDao.getProfile();
+      if (profile != null) {
+        await prefs.setInt(AppConstants.prefTodayGoalMl, profile.dailyGoalMl);
+        schedule = _ReminderSchedule.fromProfile(
+          wakeHour: profile.wakeHour,
+          wakeMinute: profile.wakeMinute,
+          sleepHour: profile.sleepHour,
+          sleepMinute: profile.sleepMinute,
+          intervalMinutes: profile.reminderIntervalMinutes,
+          notificationsEnabled: profile.notificationsEnabled,
+          soundEnabled:
+              prefs.getBool(AppConstants.prefNotificationSound) ?? true,
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to process notification intake: $e');
+      return 0;
+    } finally {
+      await db.close();
+    }
+
+    if (schedule != null) {
+      await scheduleReminders(
+        wakeHour: schedule.wakeHour,
+        wakeMinute: schedule.wakeMinute,
+        sleepHour: schedule.sleepHour,
+        sleepMinute: schedule.sleepMinute,
+        intervalMinutes: schedule.intervalMinutes,
+        notificationsEnabled: schedule.notificationsEnabled,
+        soundEnabled: schedule.soundEnabled,
+      );
+    }
+
+    return pendingCount;
+  }
+
+  Future<_TodayProgress> _loadTodayProgress() async {
+    final db = AppDatabase();
+    try {
+      final profile = await db.userProfileDao.getProfile();
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day);
+      final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      final logs = await db.waterLogsDao.getLogsForDateRange(start, end);
+      final totalMl = logs.fold<double>(0, (sum, log) => sum + log.amountMl);
+      final goalMl = profile?.dailyGoalMl ?? AppConstants.defaultDailyGoalMl;
+      return _TodayProgress(totalMl: totalMl, goalMl: goalMl);
+    } catch (e) {
+      debugPrint('Failed to load notification progress: $e');
+      return const _TodayProgress(
+        totalMl: 0,
+        goalMl: AppConstants.defaultDailyGoalMl,
+      );
+    } finally {
+      await db.close();
+    }
+  }
+
+  Future<void> _ensureLocalTimezone() async {
+    try {
+      tz.initializeTimeZones();
+      final tzInfo = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
+    } catch (e) {
+      debugPrint('Timezone init failed for notifications: $e');
+    }
+  }
+}
+
+class _ReminderSchedule {
+  const _ReminderSchedule({
+    required this.wakeHour,
+    required this.wakeMinute,
+    required this.sleepHour,
+    required this.sleepMinute,
+    required this.intervalMinutes,
+    required this.notificationsEnabled,
+    required this.soundEnabled,
+  });
+
+  factory _ReminderSchedule.fromProfile({
+    required int wakeHour,
+    required int wakeMinute,
+    required int sleepHour,
+    required int sleepMinute,
+    required int intervalMinutes,
+    required bool notificationsEnabled,
+    required bool soundEnabled,
+  }) => _ReminderSchedule(
+    wakeHour: wakeHour,
+    wakeMinute: wakeMinute,
+    sleepHour: sleepHour,
+    sleepMinute: sleepMinute,
+    intervalMinutes: intervalMinutes,
+    notificationsEnabled: notificationsEnabled,
+    soundEnabled: soundEnabled,
+  );
+
+  final int wakeHour;
+  final int wakeMinute;
+  final int sleepHour;
+  final int sleepMinute;
+  final int intervalMinutes;
+  final bool notificationsEnabled;
+  final bool soundEnabled;
+}
+
+class _TodayProgress {
+  const _TodayProgress({required this.totalMl, required this.goalMl});
+
+  final double totalMl;
+  final int goalMl;
+
+  int get percent {
+    if (goalMl <= 0) return 0;
+    return ((totalMl / goalMl) * 100).round().clamp(0, 100);
+  }
+
+  int get remainingMl => (goalMl - totalMl).ceil().clamp(0, goalMl);
+
+  String get title =>
+      percent >= 100 ? 'Hydration goal complete!' : 'Time to hydrate!';
+
+  String get body {
+    final total = totalMl.round();
+    if (percent >= 100) {
+      return '$total / $goalMl ml - 100% complete';
+    }
+    return '$total / $goalMl ml - $percent% complete - $remainingMl ml left';
+  }
 }

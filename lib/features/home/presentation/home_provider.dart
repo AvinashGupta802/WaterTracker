@@ -7,6 +7,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/hydration_calculator.dart';
 import '../../../database/database_provider.dart';
 import '../../settings/presentation/settings_provider.dart';
+import '../../reminders/data/notification_service.dart';
 import '../data/home_repository.dart';
 import '../domain/drink_type_model.dart';
 import '../domain/today_override.dart';
@@ -244,6 +245,19 @@ class HomeAction extends _$HomeAction {
     await prefs.setInt(AppConstants.prefLastDrinkTypeId, drinkType.id);
     await prefs.setInt(AppConstants.prefTodayGoalMl, goalMl);
 
+    if (profile != null) {
+      final soundEnabled =
+          prefs.getBool(AppConstants.prefNotificationSound) ?? true;
+      await NotificationService().scheduleReminders(
+        wakeHour: profile.wakeHour,
+        wakeMinute: profile.wakeMinute,
+        sleepHour: profile.sleepHour,
+        sleepMinute: profile.sleepMinute,
+        intervalMinutes: profile.reminderIntervalMinutes,
+        notificationsEnabled: profile.notificationsEnabled,
+        soundEnabled: soundEnabled,
+      );
+    }
   }
 
   Future<void> _maybeRequestReview() async {

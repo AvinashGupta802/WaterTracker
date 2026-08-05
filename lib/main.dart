@@ -26,6 +26,7 @@ Future<void> main() async {
   }
 
   final prefs = await SharedPreferences.getInstance();
+  await NotificationService().processPendingNotificationIntakes();
   final isOnboarded =
       prefs.getBool(AppConstants.prefHasCompletedOnboarding) ?? false;
 

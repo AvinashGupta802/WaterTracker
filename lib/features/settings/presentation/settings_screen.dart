@@ -280,6 +280,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const Divider(height: 1, indent: 56),
                     ListTile(
                       leading: Icon(
+                        Icons.notification_add_outlined,
+                        color: colorScheme.primary,
+                      ),
+                      title: const Text('Send test notification'),
+                      subtitle: const Text(
+                        'Show one reminder now without changing your schedule',
+                      ),
+                      trailing: Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: colorScheme.outline,
+                      ),
+                      onTap: () => _sendTestNotification(context),
+                    ),
+                    const Divider(height: 1, indent: 56),
+                    ListTile(
+                      leading: Icon(
                         Icons.battery_alert_outlined,
                         color: colorScheme.primary,
                       ),
@@ -614,6 +631,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _sendTestNotification(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final granted = await NotificationService().requestPermissions();
+    if (!granted) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Notification permission is required')),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final soundEnabled =
+        prefs.getBool(AppConstants.prefNotificationSound) ?? true;
+    await NotificationService().showTestReminderNow(soundEnabled: soundEnabled);
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Test notification sent')),
+    );
+  }
   Future<void> _onNotificationsToggled(bool enabled) async {
     if (enabled) {
       final android = FlutterLocalNotificationsPlugin()
