@@ -36,6 +36,9 @@ class NotificationService {
       'pending_notification_add_250_count';
   static const String _pendingQuickAddAmountsKey =
       'pending_notification_add_amounts';
+  static const String _scheduleAnchorDateKey = 'reminder_schedule_anchor_date';
+  static const String _scheduleAnchorMillisKey =
+      'reminder_schedule_anchor_millis';
   static const double _quickAddAmountMl = 250;
 
   Future<void> initialize() async {
@@ -124,6 +127,17 @@ class NotificationService {
     await _plugin.cancelAll();
   }
 
+  Future<void> startTodayScheduleFromNow() async {
+    await _ensureLocalTimezone();
+    final now = tz.TZDateTime.now(tz.local);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_scheduleAnchorDateKey, _dateKey(now));
+    await prefs.setInt(
+      _scheduleAnchorMillisKey,
+      now.toLocal().millisecondsSinceEpoch,
+    );
+  }
+
   /// Dismisses only the notifications currently visible in the shade.
   /// getActiveNotifications() returns just what's visible right now, not the
   /// future scheduled alarms, so cancelling by id here leaves recurring
@@ -167,28 +181,47 @@ class NotificationService {
 
       final progress = await _loadTodayProgress();
       final now = tz.TZDateTime.now(tz.local);
-      final window = _ReminderWindow.fromNow(
+      final days = await _buildScheduleDays(
         now: now,
         wakeHour: wakeHour,
         wakeMinute: wakeMinute,
         sleepHour: sleepHour,
         sleepMinute: sleepMinute,
-      );
-      final regularSlots = _regularReminderSlots(
-        now: now,
-        window: window,
         intervalMinutes: intervalMinutes,
       );
-      if (regularSlots.isEmpty) return const ReminderPreview.none();
+      final slots = days.expand((day) => day.slots).toList();
+      if (slots.isEmpty) return const ReminderPreview.none();
+
+      final todayKey = _dateKey(now);
+      final tomorrowKey = _dateKey(now.add(const Duration(days: 1)));
+      final todaySlots = slots
+          .where((slot) => _dateKey(slot.time) == todayKey)
+          .map((slot) => slot.time)
+          .toList();
+      final tomorrowSlots = slots
+          .where((slot) => _dateKey(slot.time) == tomorrowKey)
+          .map((slot) => slot.time)
+          .toList();
+      final isNextReminderToday = todaySlots.isNotEmpty;
+      final suggestionSlots = isNextReminderToday
+          ? todaySlots.length
+          : tomorrowSlots.isNotEmpty
+          ? tomorrowSlots.length
+          : slots.length;
+      final previewProgress = isNextReminderToday
+          ? progress
+          : _TodayProgress(totalMl: 0, goalMl: progress.goalMl);
 
       return ReminderPreview(
-        nextReminderAt: regularSlots.first,
+        nextReminderAt: slots.first.time,
         suggestedAmountMl: _suggestedAmountMl(
-          progress.remainingMl,
-          regularSlots.length,
+          previewProgress.remainingMl,
+          suggestionSlots,
         ),
-        remainingReminderSlots: regularSlots.length,
-        targetComplete: progress.percent >= 100,
+        remainingReminderSlots: suggestionSlots,
+        targetComplete: previewProgress.percent >= 100,
+        todayReminderTimes: todaySlots,
+        tomorrowReminderTimes: tomorrowSlots,
       );
     } catch (e) {
       debugPrint('Failed to preview next reminder: $e');
@@ -196,9 +229,9 @@ class NotificationService {
     }
   }
 
-  /// Cancels all pending reminders, then schedules the upcoming awake-window
-  /// reminders. Each normal reminder gets 5-minute follow-ups until the next
-  /// normal reminder slot. Any intake cancels and rebuilds this schedule.
+  /// Cancels all pending reminders, then schedules today from the saved anchor
+  /// and tomorrow from wake time. Each regular reminder gets one 5-minute
+  /// follow-up. Any intake cancels and rebuilds this schedule.
   Future<void> scheduleReminders({
     required int wakeHour,
     required int wakeMinute,
@@ -227,56 +260,40 @@ class NotificationService {
 
       final progress = await _loadTodayProgress();
       final now = tz.TZDateTime.now(tz.local);
-      final window = _ReminderWindow.fromNow(
+      final days = await _buildScheduleDays(
         now: now,
         wakeHour: wakeHour,
         wakeMinute: wakeMinute,
         sleepHour: sleepHour,
         sleepMinute: sleepMinute,
-      );
-
-      final regularSlots = _regularReminderSlots(
-        now: now,
-        window: window,
         intervalMinutes: intervalMinutes,
       );
-      if (regularSlots.isEmpty) return;
+      if (days.every((day) => day.slots.isEmpty)) return;
 
-      final quickAddAmountMl = _suggestedAmountMl(
-        progress.remainingMl,
-        regularSlots.length,
-      );
-      final notificationDetails = _buildNotificationDetails(
-        soundEnabled: soundEnabled,
-        progressPercent: progress.percent,
-        quickAddAmountMl: quickAddAmountMl,
-      );
+      final todayKey = _dateKey(now);
+      for (final day in days) {
+        if (day.slots.isEmpty) continue;
 
-      for (final regularSlot in regularSlots) {
-        await _plugin.zonedSchedule(
-          notificationId,
-          progress.title,
-          progress.reminderBody(quickAddAmountMl),
-          regularSlot,
-          notificationDetails,
-          androidScheduleMode: scheduleMode,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-          payload: quickAddAmountMl.toString(),
+        final dayProgress = _dateKey(day.slots.first.time) == todayKey
+            ? progress
+            : _TodayProgress(totalMl: 0, goalMl: progress.goalMl);
+        final quickAddAmountMl = _suggestedAmountMl(
+          dayProgress.remainingMl,
+          day.slots.length,
         );
-        notificationId++;
-
-        final nextRegularSlot = regularSlot.add(
-          Duration(minutes: intervalMinutes),
+        final notificationDetails = _buildNotificationDetails(
+          soundEnabled: soundEnabled,
+          progressPercent: dayProgress.percent,
+          quickAddAmountMl: quickAddAmountMl,
         );
-        var followUpSlot = regularSlot.add(const Duration(minutes: 5));
-        while (followUpSlot.isBefore(nextRegularSlot) &&
-            followUpSlot.isBefore(window.sleepTime)) {
+
+        for (final slot in day.slots) {
+          final regularSlot = slot.time;
           await _plugin.zonedSchedule(
             notificationId,
-            progress.followUpTitle,
-            progress.followUpBody(quickAddAmountMl),
-            followUpSlot,
+            dayProgress.title,
+            dayProgress.reminderBody(quickAddAmountMl),
+            regularSlot,
             notificationDetails,
             androidScheduleMode: scheduleMode,
             uiLocalNotificationDateInterpretation:
@@ -284,7 +301,22 @@ class NotificationService {
             payload: quickAddAmountMl.toString(),
           );
           notificationId++;
-          followUpSlot = followUpSlot.add(const Duration(minutes: 5));
+
+          final followUpSlot = regularSlot.add(const Duration(minutes: 5));
+          if (followUpSlot.isBefore(slot.window.sleepTime)) {
+            await _plugin.zonedSchedule(
+              notificationId,
+              dayProgress.followUpTitle,
+              dayProgress.followUpBody(quickAddAmountMl),
+              followUpSlot,
+              notificationDetails,
+              androidScheduleMode: scheduleMode,
+              uiLocalNotificationDateInterpretation:
+                  UILocalNotificationDateInterpretation.absoluteTime,
+              payload: quickAddAmountMl.toString(),
+            );
+            notificationId++;
+          }
         }
       }
     } catch (e) {
@@ -451,23 +483,94 @@ class NotificationService {
     }
   }
 
-  List<tz.TZDateTime> _regularReminderSlots({
+  Future<List<_ReminderScheduleDay>> _buildScheduleDays({
+    required tz.TZDateTime now,
+    required int wakeHour,
+    required int wakeMinute,
+    required int sleepHour,
+    required int sleepMinute,
+    required int intervalMinutes,
+  }) async {
+    final currentWindow = _ReminderWindow.fromNow(
+      now: now,
+      wakeHour: wakeHour,
+      wakeMinute: wakeMinute,
+      sleepHour: sleepHour,
+      sleepMinute: sleepMinute,
+    );
+    final nextWindow = currentWindow.nextDay();
+    final anchor = await _todayScheduleAnchor(now);
+    final currentStart = _startForCurrentWindow(
+      window: currentWindow,
+      anchor: anchor,
+    );
+
+    return <_ReminderScheduleDay>[
+      _ReminderScheduleDay(
+        window: currentWindow,
+        slots: _regularReminderSlots(
+          now: now,
+          window: currentWindow,
+          intervalMinutes: intervalMinutes,
+          startTime: currentStart,
+        ),
+      ),
+      _ReminderScheduleDay(
+        window: nextWindow,
+        slots: _regularReminderSlots(
+          now: now,
+          window: nextWindow,
+          intervalMinutes: intervalMinutes,
+          startTime: nextWindow.wakeTime,
+        ),
+      ),
+    ];
+  }
+
+  tz.TZDateTime _startForCurrentWindow({
+    required _ReminderWindow window,
+    required tz.TZDateTime? anchor,
+  }) {
+    if (anchor == null) return window.wakeTime;
+    if (anchor.isBefore(window.wakeTime) ||
+        !anchor.isBefore(window.sleepTime)) {
+      return window.wakeTime;
+    }
+    return anchor;
+  }
+
+  List<_ReminderSlot> _regularReminderSlots({
     required tz.TZDateTime now,
     required _ReminderWindow window,
     required int intervalMinutes,
+    required tz.TZDateTime startTime,
   }) {
-    final slots = <tz.TZDateTime>[];
-    var regularSlot = window.wakeTime.add(Duration(minutes: intervalMinutes));
+    final slots = <_ReminderSlot>[];
+    var regularSlot = startTime.add(Duration(minutes: intervalMinutes));
     while (!regularSlot.isAfter(now)) {
       regularSlot = regularSlot.add(Duration(minutes: intervalMinutes));
     }
 
     while (regularSlot.isBefore(window.sleepTime)) {
-      slots.add(regularSlot);
+      slots.add(_ReminderSlot(time: regularSlot, window: window));
       regularSlot = regularSlot.add(Duration(minutes: intervalMinutes));
     }
     return slots;
   }
+
+  Future<tz.TZDateTime?> _todayScheduleAnchor(tz.TZDateTime now) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(_scheduleAnchorDateKey) != _dateKey(now)) return null;
+    final millis = prefs.getInt(_scheduleAnchorMillisKey);
+    if (millis == null) return null;
+    return tz.TZDateTime.from(
+      DateTime.fromMillisecondsSinceEpoch(millis),
+      tz.local,
+    );
+  }
+
+  String _dateKey(DateTime value) =>
+      '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 
   int _suggestedAmountMl(int remainingMl, int remainingReminderSlots) {
     if (remainingMl <= 0 || remainingReminderSlots <= 0) return 0;
@@ -492,18 +595,38 @@ class ReminderPreview {
     required this.suggestedAmountMl,
     required this.remainingReminderSlots,
     required this.targetComplete,
+    required this.todayReminderTimes,
+    required this.tomorrowReminderTimes,
   });
 
   const ReminderPreview.none()
     : nextReminderAt = null,
       suggestedAmountMl = 0,
       remainingReminderSlots = 0,
-      targetComplete = false;
+      targetComplete = false,
+      todayReminderTimes = const <DateTime>[],
+      tomorrowReminderTimes = const <DateTime>[];
 
   final DateTime? nextReminderAt;
   final int suggestedAmountMl;
   final int remainingReminderSlots;
   final bool targetComplete;
+  final List<DateTime> todayReminderTimes;
+  final List<DateTime> tomorrowReminderTimes;
+}
+
+class _ReminderScheduleDay {
+  const _ReminderScheduleDay({required this.window, required this.slots});
+
+  final _ReminderWindow window;
+  final List<_ReminderSlot> slots;
+}
+
+class _ReminderSlot {
+  const _ReminderSlot({required this.time, required this.window});
+
+  final tz.TZDateTime time;
+  final _ReminderWindow window;
 }
 
 class _ReminderWindow {
@@ -606,6 +729,11 @@ class _ReminderWindow {
 
     return _ReminderWindow(wakeTime: wakeTime, sleepTime: sleepTime);
   }
+
+  _ReminderWindow nextDay() => _ReminderWindow(
+    wakeTime: wakeTime.add(const Duration(days: 1)),
+    sleepTime: sleepTime.add(const Duration(days: 1)),
+  );
 
   final tz.TZDateTime wakeTime;
   final tz.TZDateTime sleepTime;

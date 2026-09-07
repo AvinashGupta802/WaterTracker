@@ -2218,13 +2218,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   ) {
     final nextReminderAt = preview.nextReminderAt;
     if (nextReminderAt == null) {
-      return '$intervalText\nNo reminder scheduled today';
+      return <String>[
+        intervalText,
+        'Today: no more reminders',
+        'Tomorrow: no reminders scheduled',
+      ].join('\n');
     }
 
     final suggestion = preview.targetComplete
         ? 'Goal complete'
         : 'Suggested add: ${preview.suggestedAmountMl} ml';
-    return '$intervalText\nNext: ${_formatReminderDateTime(nextReminderAt)} • $suggestion';
+    return <String>[
+      intervalText,
+      'Next: ${_formatReminderDateTime(nextReminderAt)} • $suggestion',
+      'Today: ${_formatReminderTimes(preview.todayReminderTimes, emptyText: 'no more reminders')}',
+      'Tomorrow: ${_formatReminderTimes(preview.tomorrowReminderTimes, emptyText: 'no reminders scheduled')}',
+    ].join('\n');
+  }
+
+  String _formatReminderTimes(
+    List<DateTime> dateTimes, {
+    required String emptyText,
+  }) {
+    if (dateTimes.isEmpty) return emptyText;
+    const maxVisibleTimes = 4;
+    final visibleTimes = dateTimes
+        .take(maxVisibleTimes)
+        .map((dateTime) {
+          final local = dateTime.toLocal();
+          return _formatTime(local.hour, local.minute);
+        })
+        .join(', ');
+    final remainingCount = dateTimes.length - maxVisibleTimes;
+    if (remainingCount <= 0) return visibleTimes;
+    return '$visibleTimes, +$remainingCount more';
   }
 
   String _formatReminderDateTime(DateTime dateTime) {

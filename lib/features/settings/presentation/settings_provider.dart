@@ -35,9 +35,7 @@ Future<UserProfileModel?> settingsProfile(SettingsProfileRef ref) =>
 class SettingsNotifier extends _$SettingsNotifier {
   @override
   Future<UserProfileModel?> build() async {
-    final profile = await ref
-        .watch(settingsRepositoryProvider)
-        .getProfile();
+    final profile = await ref.watch(settingsRepositoryProvider).getProfile();
 
     if (profile != null && profile.dailyGoalMl % 50 != 0) {
       final roundedGoal = HydrationCalculator.calculateDailyGoalMl(
@@ -100,13 +98,17 @@ class SettingsNotifier extends _$SettingsNotifier {
       isPregnant: current.isPregnant,
       climateType: current.climateType,
     );
-    state = AsyncData(current.copyWith(
-      weightKg: weightKg,
-      dailyGoalMl: newGoal,
-      weightUnit: weightUnit,
-    ));
+    state = AsyncData(
+      current.copyWith(
+        weightKg: weightKg,
+        dailyGoalMl: newGoal,
+        weightUnit: weightUnit,
+      ),
+    );
     try {
-      await ref.read(settingsRepositoryProvider).updateWeight(weightKg, weightUnit);
+      await ref
+          .read(settingsRepositoryProvider)
+          .updateWeight(weightKg, weightUnit);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
@@ -151,6 +153,7 @@ class SettingsNotifier extends _$SettingsNotifier {
     state = AsyncData(current.copyWith(wakeHour: hour, wakeMinute: minute));
     try {
       await ref.read(settingsRepositoryProvider).updateWakeTime(hour, minute);
+      await NotificationService().startTodayScheduleFromNow();
       await _reschedule();
     } catch (e, st) {
       state = AsyncError(e, st);
@@ -163,6 +166,7 @@ class SettingsNotifier extends _$SettingsNotifier {
     state = AsyncData(current.copyWith(sleepHour: hour, sleepMinute: minute));
     try {
       await ref.read(settingsRepositoryProvider).updateSleepTime(hour, minute);
+      await NotificationService().startTodayScheduleFromNow();
       await _reschedule();
     } catch (e, st) {
       state = AsyncError(e, st);
@@ -177,6 +181,9 @@ class SettingsNotifier extends _$SettingsNotifier {
       await ref
           .read(settingsRepositoryProvider)
           .updateNotificationsEnabled(enabled);
+      if (enabled) {
+        await NotificationService().startTodayScheduleFromNow();
+      }
       await _reschedule();
     } catch (e, st) {
       state = AsyncError(e, st);
@@ -191,6 +198,7 @@ class SettingsNotifier extends _$SettingsNotifier {
       await ref
           .read(settingsRepositoryProvider)
           .updateReminderInterval(minutes);
+      await NotificationService().startTodayScheduleFromNow();
       await _reschedule();
     } catch (e, st) {
       state = AsyncError(e, st);
@@ -224,10 +232,9 @@ class SettingsNotifier extends _$SettingsNotifier {
       isPregnant: current.isPregnant,
       climateType: current.climateType,
     );
-    state = AsyncData(current.copyWith(
-      activityLevel: level,
-      dailyGoalMl: newGoal,
-    ));
+    state = AsyncData(
+      current.copyWith(activityLevel: level, dailyGoalMl: newGoal),
+    );
     try {
       await ref.read(settingsRepositoryProvider).updateActivityLevel(level);
     } catch (e, st) {
@@ -263,7 +270,9 @@ class SettingsNotifier extends _$SettingsNotifier {
       isPregnant: value,
       climateType: current.climateType,
     );
-    state = AsyncData(current.copyWith(isPregnant: value, dailyGoalMl: newGoal));
+    state = AsyncData(
+      current.copyWith(isPregnant: value, dailyGoalMl: newGoal),
+    );
     try {
       await ref.read(settingsRepositoryProvider).updateIsPregnant(value);
     } catch (e, st) {
@@ -294,7 +303,8 @@ class SettingsNotifier extends _$SettingsNotifier {
       climateType: climate,
     );
     state = AsyncData(
-        current.copyWith(climateType: climate, dailyGoalMl: newGoal));
+      current.copyWith(climateType: climate, dailyGoalMl: newGoal),
+    );
     try {
       await ref.read(settingsRepositoryProvider).updateClimateType(climate);
     } catch (e, st) {
