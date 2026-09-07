@@ -144,9 +144,9 @@ class NotificationService {
     return await androidPlugin?.canScheduleExactNotifications() ?? false;
   }
 
-  /// Cancels all pending reminders, then registers one notification per
-  /// interval slot between wake and sleep, each using [DateTimeComponents.time]
-  /// so the OS repeats it at that same time every day indefinitely.
+  /// Cancels all pending reminders, then schedules the upcoming awake-window
+  /// reminders. Each normal reminder gets 5-minute follow-ups until the next
+  /// normal reminder slot. Any intake cancels and rebuilds this schedule.
   Future<void> scheduleReminders({
     required int wakeHour,
     required int wakeMinute,
@@ -156,14 +156,12 @@ class NotificationService {
     required bool notificationsEnabled,
     required bool soundEnabled,
   }) async {
-    int notificationId = 100;
+    var notificationId = 100;
     try {
       await _ensureLocalTimezone();
 
-      if (!notificationsEnabled || intervalMinutes == 0) {
-        await _plugin.cancelAll();
-        return;
-      }
+      await _plugin.cancelAll();
+      if (!notificationsEnabled || intervalMinutes == 0) return;
 
       final androidPlugin = _plugin
           .resolvePlatformSpecificImplementation<
@@ -175,8 +173,6 @@ class NotificationService {
           ? AndroidScheduleMode.exactAllowWhileIdle
           : AndroidScheduleMode.inexact;
 
-      await _plugin.cancelAll();
-
       final progress = await _loadTodayProgress();
       final notificationDetails = _buildNotificationDetails(
         soundEnabled: soundEnabled,
@@ -184,51 +180,53 @@ class NotificationService {
       );
 
       final now = tz.TZDateTime.now(tz.local);
-
-      // If sleep time, read as a plain time-of-day, falls at or before wake
-      // time, bedtime is after midnight relative to wake time.
-      final wakeMinutesOfDay = wakeHour * 60 + wakeMinute;
-      final sleepMinutesOfDay = sleepHour * 60 + sleepMinute;
-      final sleepCrossesMidnight = sleepMinutesOfDay <= wakeMinutesOfDay;
-
-      // First slot is wake + interval, not wake itself.
-      var slotTime = tz.TZDateTime(
-        tz.local,
-        now.year,
-        now.month,
-        now.day,
-        wakeHour,
-        wakeMinute,
-      ).add(Duration(minutes: intervalMinutes));
-
-      final sleepDate = sleepCrossesMidnight
-          ? now.add(const Duration(days: 1))
-          : now;
-
-      final sleepTime = tz.TZDateTime(
-        tz.local,
-        sleepDate.year,
-        sleepDate.month,
-        sleepDate.day,
-        sleepHour,
-        sleepMinute,
+      final window = _ReminderWindow.fromNow(
+        now: now,
+        wakeHour: wakeHour,
+        wakeMinute: wakeMinute,
+        sleepHour: sleepHour,
+        sleepMinute: sleepMinute,
       );
 
-      while (slotTime.isBefore(sleepTime)) {
+      var regularSlot = window.wakeTime.add(Duration(minutes: intervalMinutes));
+      while (!regularSlot.isAfter(now)) {
+        regularSlot = regularSlot.add(Duration(minutes: intervalMinutes));
+      }
+
+      while (regularSlot.isBefore(window.sleepTime)) {
         await _plugin.zonedSchedule(
           notificationId,
           progress.title,
           progress.body,
-          slotTime,
+          regularSlot,
           notificationDetails,
           androidScheduleMode: scheduleMode,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.time,
         );
-
         notificationId++;
-        slotTime = slotTime.add(Duration(minutes: intervalMinutes));
+
+        final nextRegularSlot = regularSlot.add(
+          Duration(minutes: intervalMinutes),
+        );
+        var followUpSlot = regularSlot.add(const Duration(minutes: 5));
+        while (followUpSlot.isBefore(nextRegularSlot) &&
+            followUpSlot.isBefore(window.sleepTime)) {
+          await _plugin.zonedSchedule(
+            notificationId,
+            progress.followUpTitle,
+            progress.followUpBody,
+            followUpSlot,
+            notificationDetails,
+            androidScheduleMode: scheduleMode,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+          );
+          notificationId++;
+          followUpSlot = followUpSlot.add(const Duration(minutes: 5));
+        }
+
+        regularSlot = nextRegularSlot;
       }
     } catch (e) {
       debugPrint('Failed to schedule reminders id=$notificationId: $e');
@@ -389,6 +387,111 @@ class NotificationService {
   }
 }
 
+class _ReminderWindow {
+  const _ReminderWindow({required this.wakeTime, required this.sleepTime});
+
+  factory _ReminderWindow.fromNow({
+    required tz.TZDateTime now,
+    required int wakeHour,
+    required int wakeMinute,
+    required int sleepHour,
+    required int sleepMinute,
+  }) {
+    final wakeMinutesOfDay = wakeHour * 60 + wakeMinute;
+    final sleepMinutesOfDay = sleepHour * 60 + sleepMinute;
+    final nowMinutesOfDay = now.hour * 60 + now.minute;
+    final sleepCrossesMidnight = sleepMinutesOfDay <= wakeMinutesOfDay;
+
+    late tz.TZDateTime wakeTime;
+    late tz.TZDateTime sleepTime;
+
+    if (sleepCrossesMidnight && nowMinutesOfDay < sleepMinutesOfDay) {
+      final yesterday = now.subtract(const Duration(days: 1));
+      wakeTime = tz.TZDateTime(
+        tz.local,
+        yesterday.year,
+        yesterday.month,
+        yesterday.day,
+        wakeHour,
+        wakeMinute,
+      );
+      sleepTime = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        sleepHour,
+        sleepMinute,
+      );
+    } else {
+      wakeTime = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        wakeHour,
+        wakeMinute,
+      );
+      final sleepDate = sleepCrossesMidnight
+          ? now.add(const Duration(days: 1))
+          : now;
+      sleepTime = tz.TZDateTime(
+        tz.local,
+        sleepDate.year,
+        sleepDate.month,
+        sleepDate.day,
+        sleepHour,
+        sleepMinute,
+      );
+    }
+
+    if (!sleepCrossesMidnight && !now.isBefore(sleepTime)) {
+      final tomorrow = now.add(const Duration(days: 1));
+      wakeTime = tz.TZDateTime(
+        tz.local,
+        tomorrow.year,
+        tomorrow.month,
+        tomorrow.day,
+        wakeHour,
+        wakeMinute,
+      );
+      sleepTime = tz.TZDateTime(
+        tz.local,
+        tomorrow.year,
+        tomorrow.month,
+        tomorrow.day,
+        sleepHour,
+        sleepMinute,
+      );
+    }
+
+    if (sleepCrossesMidnight && !now.isBefore(sleepTime)) {
+      wakeTime = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        wakeHour,
+        wakeMinute,
+      );
+      final tomorrow = now.add(const Duration(days: 1));
+      sleepTime = tz.TZDateTime(
+        tz.local,
+        tomorrow.year,
+        tomorrow.month,
+        tomorrow.day,
+        sleepHour,
+        sleepMinute,
+      );
+    }
+
+    return _ReminderWindow(wakeTime: wakeTime, sleepTime: sleepTime);
+  }
+
+  final tz.TZDateTime wakeTime;
+  final tz.TZDateTime sleepTime;
+}
+
 class _ReminderSchedule {
   const _ReminderSchedule({
     required this.wakeHour,
@@ -443,11 +546,19 @@ class _TodayProgress {
   String get title =>
       percent >= 100 ? 'Hydration goal complete!' : 'Time to hydrate!';
 
+  String get followUpTitle =>
+      percent >= 100 ? 'Hydration goal complete!' : 'Still time to hydrate';
+
   String get body {
     final total = totalMl.round();
     if (percent >= 100) {
       return '$total / $goalMl ml - 100% complete';
     }
     return '$total / $goalMl ml - $percent% complete - $remainingMl ml left';
+  }
+
+  String get followUpBody {
+    if (percent >= 100) return body;
+    return 'No intake logged yet - $remainingMl ml left today';
   }
 }
