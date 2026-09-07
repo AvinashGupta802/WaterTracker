@@ -34,6 +34,8 @@ class NotificationService {
   static const String _quickAdd250ActionId = 'add_250_ml';
   static const String _pendingQuickAddCountKey =
       'pending_notification_add_250_count';
+  static const String _pendingQuickAddAmountsKey =
+      'pending_notification_add_amounts';
   static const double _quickAddAmountMl = 250;
 
   Future<void> initialize() async {
@@ -81,7 +83,9 @@ class NotificationService {
 
   Future<void> handleNotificationResponse(NotificationResponse details) async {
     if (details.actionId == _quickAdd250ActionId) {
-      await _queueQuickIntakeFromNotification();
+      final amountMl =
+          double.tryParse(details.payload ?? '') ?? _quickAddAmountMl;
+      await _queueQuickIntakeFromNotification(amountMl);
       return;
     }
 
@@ -93,14 +97,17 @@ class NotificationService {
     await initialize();
 
     final progress = await _loadTodayProgress();
+    final quickAddAmountMl = _suggestedAmountMl(progress.remainingMl, 1);
     await _plugin.show(
       90,
       progress.title,
-      progress.body,
+      progress.reminderBody(quickAddAmountMl),
       _buildNotificationDetails(
         soundEnabled: soundEnabled,
         progressPercent: progress.percent,
+        quickAddAmountMl: quickAddAmountMl,
       ),
+      payload: quickAddAmountMl.toString(),
     );
   }
 
@@ -144,6 +151,51 @@ class NotificationService {
     return await androidPlugin?.canScheduleExactNotifications() ?? false;
   }
 
+  Future<ReminderPreview> getReminderPreview({
+    required int wakeHour,
+    required int wakeMinute,
+    required int sleepHour,
+    required int sleepMinute,
+    required int intervalMinutes,
+    required bool notificationsEnabled,
+  }) async {
+    try {
+      await _ensureLocalTimezone();
+      if (!notificationsEnabled || intervalMinutes == 0) {
+        return const ReminderPreview.none();
+      }
+
+      final progress = await _loadTodayProgress();
+      final now = tz.TZDateTime.now(tz.local);
+      final window = _ReminderWindow.fromNow(
+        now: now,
+        wakeHour: wakeHour,
+        wakeMinute: wakeMinute,
+        sleepHour: sleepHour,
+        sleepMinute: sleepMinute,
+      );
+      final regularSlots = _regularReminderSlots(
+        now: now,
+        window: window,
+        intervalMinutes: intervalMinutes,
+      );
+      if (regularSlots.isEmpty) return const ReminderPreview.none();
+
+      return ReminderPreview(
+        nextReminderAt: regularSlots.first,
+        suggestedAmountMl: _suggestedAmountMl(
+          progress.remainingMl,
+          regularSlots.length,
+        ),
+        remainingReminderSlots: regularSlots.length,
+        targetComplete: progress.percent >= 100,
+      );
+    } catch (e) {
+      debugPrint('Failed to preview next reminder: $e');
+      return const ReminderPreview.none();
+    }
+  }
+
   /// Cancels all pending reminders, then schedules the upcoming awake-window
   /// reminders. Each normal reminder gets 5-minute follow-ups until the next
   /// normal reminder slot. Any intake cancels and rebuilds this schedule.
@@ -174,11 +226,6 @@ class NotificationService {
           : AndroidScheduleMode.inexact;
 
       final progress = await _loadTodayProgress();
-      final notificationDetails = _buildNotificationDetails(
-        soundEnabled: soundEnabled,
-        progressPercent: progress.percent,
-      );
-
       final now = tz.TZDateTime.now(tz.local);
       final window = _ReminderWindow.fromNow(
         now: now,
@@ -188,21 +235,34 @@ class NotificationService {
         sleepMinute: sleepMinute,
       );
 
-      var regularSlot = window.wakeTime.add(Duration(minutes: intervalMinutes));
-      while (!regularSlot.isAfter(now)) {
-        regularSlot = regularSlot.add(Duration(minutes: intervalMinutes));
-      }
+      final regularSlots = _regularReminderSlots(
+        now: now,
+        window: window,
+        intervalMinutes: intervalMinutes,
+      );
+      if (regularSlots.isEmpty) return;
 
-      while (regularSlot.isBefore(window.sleepTime)) {
+      final quickAddAmountMl = _suggestedAmountMl(
+        progress.remainingMl,
+        regularSlots.length,
+      );
+      final notificationDetails = _buildNotificationDetails(
+        soundEnabled: soundEnabled,
+        progressPercent: progress.percent,
+        quickAddAmountMl: quickAddAmountMl,
+      );
+
+      for (final regularSlot in regularSlots) {
         await _plugin.zonedSchedule(
           notificationId,
           progress.title,
-          progress.body,
+          progress.reminderBody(quickAddAmountMl),
           regularSlot,
           notificationDetails,
           androidScheduleMode: scheduleMode,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
+          payload: quickAddAmountMl.toString(),
         );
         notificationId++;
 
@@ -215,18 +275,17 @@ class NotificationService {
           await _plugin.zonedSchedule(
             notificationId,
             progress.followUpTitle,
-            progress.followUpBody,
+            progress.followUpBody(quickAddAmountMl),
             followUpSlot,
             notificationDetails,
             androidScheduleMode: scheduleMode,
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
+            payload: quickAddAmountMl.toString(),
           );
           notificationId++;
           followUpSlot = followUpSlot.add(const Duration(minutes: 5));
         }
-
-        regularSlot = nextRegularSlot;
       }
     } catch (e) {
       debugPrint('Failed to schedule reminders id=$notificationId: $e');
@@ -236,6 +295,7 @@ class NotificationService {
   NotificationDetails _buildNotificationDetails({
     required bool soundEnabled,
     required int progressPercent,
+    required int quickAddAmountMl,
   }) {
     final channelId = soundEnabled ? _soundChannelId : _silentChannelId;
     final channelName = soundEnabled
@@ -258,22 +318,26 @@ class NotificationService {
         showProgress: true,
         maxProgress: 100,
         progress: progressPercent.clamp(0, 100),
-        actions: const <AndroidNotificationAction>[
-          AndroidNotificationAction(
-            _quickAdd250ActionId,
-            '+250 ml',
-            showsUserInterface: false,
-            cancelNotification: true,
-          ),
-        ],
+        actions: quickAddAmountMl > 0
+            ? <AndroidNotificationAction>[
+                AndroidNotificationAction(
+                  _quickAdd250ActionId,
+                  '+$quickAddAmountMl ml',
+                  showsUserInterface: false,
+                  cancelNotification: true,
+                ),
+              ]
+            : null,
       ),
     );
   }
 
-  Future<void> _queueQuickIntakeFromNotification() async {
+  Future<void> _queueQuickIntakeFromNotification(double amountMl) async {
     final prefs = await SharedPreferences.getInstance();
-    final pendingCount = prefs.getInt(_pendingQuickAddCountKey) ?? 0;
-    await prefs.setInt(_pendingQuickAddCountKey, pendingCount + 1);
+    final pendingAmounts =
+        prefs.getStringList(_pendingQuickAddAmountsKey) ?? <String>[];
+    pendingAmounts.add(amountMl.toString());
+    await prefs.setStringList(_pendingQuickAddAmountsKey, pendingAmounts);
     await processPendingNotificationIntakes();
   }
 
@@ -281,8 +345,17 @@ class NotificationService {
     await _ensureLocalTimezone();
 
     final prefs = await SharedPreferences.getInstance();
-    final pendingCount = prefs.getInt(_pendingQuickAddCountKey) ?? 0;
-    if (pendingCount <= 0) return 0;
+    final pendingAmounts =
+        (prefs.getStringList(_pendingQuickAddAmountsKey) ?? <String>[])
+            .map(double.tryParse)
+            .whereType<double>()
+            .where((amountMl) => amountMl > 0)
+            .toList();
+    final legacyPendingCount = prefs.getInt(_pendingQuickAddCountKey) ?? 0;
+    pendingAmounts.addAll(
+      List<double>.filled(legacyPendingCount, _quickAddAmountMl),
+    );
+    if (pendingAmounts.isEmpty) return 0;
 
     _ReminderSchedule? schedule;
     final db = AppDatabase();
@@ -301,20 +374,22 @@ class NotificationService {
       );
 
       final now = DateTime.now();
-      for (var i = 0; i < pendingCount; i++) {
+      for (var i = 0; i < pendingAmounts.length; i++) {
+        final amountMl = pendingAmounts[i];
         await db.waterLogsDao.insertLog(
           WaterLogsCompanion.insert(
             loggedAt: now.add(Duration(milliseconds: i)),
-            amountMl: _quickAddAmountMl,
+            amountMl: amountMl,
             drinkTypeId: drinkType.id,
           ),
         );
       }
 
+      await prefs.remove(_pendingQuickAddAmountsKey);
       await prefs.remove(_pendingQuickAddCountKey);
       await prefs.setInt(
         AppConstants.prefLastCupSizeMl,
-        _quickAddAmountMl.round(),
+        pendingAmounts.last.round(),
       );
       await prefs.setInt(AppConstants.prefLastDrinkTypeId, drinkType.id);
 
@@ -351,7 +426,7 @@ class NotificationService {
       );
     }
 
-    return pendingCount;
+    return pendingAmounts.length;
   }
 
   Future<_TodayProgress> _loadTodayProgress() async {
@@ -376,6 +451,30 @@ class NotificationService {
     }
   }
 
+  List<tz.TZDateTime> _regularReminderSlots({
+    required tz.TZDateTime now,
+    required _ReminderWindow window,
+    required int intervalMinutes,
+  }) {
+    final slots = <tz.TZDateTime>[];
+    var regularSlot = window.wakeTime.add(Duration(minutes: intervalMinutes));
+    while (!regularSlot.isAfter(now)) {
+      regularSlot = regularSlot.add(Duration(minutes: intervalMinutes));
+    }
+
+    while (regularSlot.isBefore(window.sleepTime)) {
+      slots.add(regularSlot);
+      regularSlot = regularSlot.add(Duration(minutes: intervalMinutes));
+    }
+    return slots;
+  }
+
+  int _suggestedAmountMl(int remainingMl, int remainingReminderSlots) {
+    if (remainingMl <= 0 || remainingReminderSlots <= 0) return 0;
+    final rawAmount = (remainingMl / remainingReminderSlots).ceil();
+    return ((rawAmount + 49) ~/ 50) * 50;
+  }
+
   Future<void> _ensureLocalTimezone() async {
     try {
       tz.initializeTimeZones();
@@ -385,6 +484,26 @@ class NotificationService {
       debugPrint('Timezone init failed for notifications: $e');
     }
   }
+}
+
+class ReminderPreview {
+  const ReminderPreview({
+    required this.nextReminderAt,
+    required this.suggestedAmountMl,
+    required this.remainingReminderSlots,
+    required this.targetComplete,
+  });
+
+  const ReminderPreview.none()
+    : nextReminderAt = null,
+      suggestedAmountMl = 0,
+      remainingReminderSlots = 0,
+      targetComplete = false;
+
+  final DateTime? nextReminderAt;
+  final int suggestedAmountMl;
+  final int remainingReminderSlots;
+  final bool targetComplete;
 }
 
 class _ReminderWindow {
@@ -549,16 +668,16 @@ class _TodayProgress {
   String get followUpTitle =>
       percent >= 100 ? 'Hydration goal complete!' : 'Still time to hydrate';
 
-  String get body {
+  String reminderBody(int suggestedAmountMl) {
     final total = totalMl.round();
     if (percent >= 100) {
       return '$total / $goalMl ml - 100% complete';
     }
-    return '$total / $goalMl ml - $percent% complete - $remainingMl ml left';
+    return '$total / $goalMl ml - $percent% complete - add $suggestedAmountMl ml to stay on track';
   }
 
-  String get followUpBody {
-    if (percent >= 100) return body;
-    return 'No intake logged yet - $remainingMl ml left today';
+  String followUpBody(int suggestedAmountMl) {
+    if (percent >= 100) return reminderBody(suggestedAmountMl);
+    return 'No intake logged yet - add $suggestedAmountMl ml to stay on track';
   }
 }

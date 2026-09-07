@@ -25,8 +25,9 @@ import 'settings_provider.dart';
 
 Future<void> openBatteryOptimizationSettings() async {
   try {
-    const channel =
-        MethodChannel('com.ishaansharma.hydrate_yourself/device_info');
+    const channel = MethodChannel(
+      'com.ishaansharma.hydrate_yourself/device_info',
+    );
     await channel.invokeMethod('openBatterySettings');
   } catch (e) {
     debugPrint('Could not open battery settings: $e');
@@ -46,8 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _versionFuture = PackageInfo.fromPlatform()
-        .then((info) => info.version);
+    _versionFuture = PackageInfo.fromPlatform().then((info) => info.version);
   }
 
   @override
@@ -61,35 +61,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: SafeArea(
-        child: settingsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, st) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Failed to load settings'),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: () => ref.invalidate(settingsNotifierProvider),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          },
-          data: (profile) => profile == null
-              ? const Center(child: Text('No profile found'))
-              : _buildContent(context, ref, profile, themeMode),
+          child: settingsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, st) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Failed to load settings'),
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed: () => ref.invalidate(settingsNotifierProvider),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            },
+            data: (profile) => profile == null
+                ? const Center(child: Text('No profile found'))
+                : _buildContent(context, ref, profile, themeMode),
+          ),
         ),
-      ),
       ),
     );
   }
 
   Widget _buildContent(
-      BuildContext context, WidgetRef ref, UserProfileModel profile,
-      ThemeMode themeMode) {
+    BuildContext context,
+    WidgetRef ref,
+    UserProfileModel profile,
+    ThemeMode themeMode,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     final selectedMascot = ref.watch(selectedMascotProvider);
     return CustomScrollView(
@@ -99,9 +102,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           backgroundColor: Theme.of(context).colorScheme.surface,
           title: Text(
             'Settings',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
         SliverToBoxAdapter(
@@ -146,10 +149,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 context,
                 children: [
                   ListTile(
-                    leading: Icon(Icons.person_outlined,
-                        color: colorScheme.primary),
-                    title: Text('Gender',
-                        style: Theme.of(context).textTheme.bodyLarge),
+                    leading: Icon(
+                      Icons.person_outlined,
+                      color: colorScheme.primary,
+                    ),
+                    title: Text(
+                      'Gender',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -163,42 +170,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             HydrationCalculator.genderLabel(profile.gender),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Icon(Icons.chevron_right,
-                            size: 20, color: colorScheme.onSurfaceVariant),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ],
                     ),
-                    onTap: () =>
-                        _showGenderDialog(context, ref, profile),
+                    onTap: () => _showGenderDialog(context, ref, profile),
                   ),
                   if (profile.gender == 'female') ...[
                     const Divider(height: 1, indent: 56),
                     SwitchListTile(
-                      secondary: const Text('🤰',
-                          style: TextStyle(fontSize: 22)),
-                      title: Text('Pregnant',
-                          style: Theme.of(context).textTheme.bodyLarge),
+                      secondary: const Text(
+                        '🤰',
+                        style: TextStyle(fontSize: 22),
+                      ),
+                      title: Text(
+                        'Pregnant',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
                       subtitle: Builder(
                         builder: (ctx) {
-                          final extraRaw = (profile.weightKg * 3.5)
-                              .clamp(0.0, 300.0);
-                          final extra =
-                              ((extraRaw / 5).round() * 5).toDouble();
+                          final extraRaw = (profile.weightKg * 3.5).clamp(
+                            0.0,
+                            300.0,
+                          );
+                          final extra = ((extraRaw / 5).round() * 5).toDouble();
                           final display = profile.unit == 'oz'
                               ? extra.toHalfOzString()
                               : '${extra.round()}ml';
                           return Text(
                             '+$display',
-                            style: Theme.of(ctx).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(ctx)
-                                      .colorScheme.onSurfaceVariant,
-                                ),
+                            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                            ),
                           );
                         },
                       ),
@@ -214,28 +225,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       HydrationCalculator.climateEmoji(profile.climateType),
                       style: const TextStyle(fontSize: 20),
                     ),
-                    title: Text('Climate',
-                        style: Theme.of(context).textTheme.bodyLarge),
+                    title: Text(
+                      'Climate',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
                           child: Text(
-                            HydrationCalculator.climateLabel(profile.climateType),
+                            HydrationCalculator.climateLabel(
+                              profile.climateType,
+                            ),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
                           ),
                         ),
                         const SizedBox(width: 4),
-                        Icon(Icons.chevron_right,
-                            size: 20, color: colorScheme.onSurfaceVariant),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ],
                     ),
-                    onTap: () =>
-                        _showClimateDialog(context, ref, profile),
+                    onTap: () => _showClimateDialog(context, ref, profile),
                   ),
                 ],
               ),
@@ -273,8 +289,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   if (profile.notificationsEnabled) ...[
                     const Divider(height: 1, indent: 56),
-                    _buildReminderIntervalTile(
-                        context, ref, profile.reminderIntervalMinutes),
+                    _buildReminderIntervalTile(context, ref, profile),
                     const Divider(height: 1, indent: 56),
                     _buildSoundToggleTile(context),
                     const Divider(height: 1, indent: 56),
@@ -340,9 +355,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _buildSectionHeader(context, 'Appearance'),
               _buildCard(
                 context,
-                children: [
-                  _buildThemeModeTile(context, ref, themeMode),
-                ],
+                children: [_buildThemeModeTile(context, ref, themeMode)],
               ),
 
               const SizedBox(height: 8),
@@ -368,14 +381,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               margin: const EdgeInsets.only(right: 10),
                               clipBehavior: Clip.hardEdge,
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 8, horizontal: 4),
+                                vertical: 8,
+                                horizontal: 4,
+                              ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: isSelected
                                       ? colorScheme.primary
-                                      : colorScheme.outline
-                                          .withValues(alpha: 0.3),
+                                      : colorScheme.outline.withValues(
+                                          alpha: 0.3,
+                                        ),
                                   width: isSelected ? 2 : 0.5,
                                 ),
                                 color: isSelected
@@ -439,7 +455,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 context,
                 children: [
                   ListTile(
-                    leading: Icon(Icons.star_outline, color: colorScheme.primary),
+                    leading: Icon(
+                      Icons.star_outline,
+                      color: colorScheme.primary,
+                    ),
                     title: Text(
                       'Rate the app',
                       style: Theme.of(context).textTheme.bodyLarge,
@@ -448,7 +467,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const Divider(height: 1, indent: 56),
                   ListTile(
-                    leading: Icon(Icons.share_outlined, color: colorScheme.primary),
+                    leading: Icon(
+                      Icons.share_outlined,
+                      color: colorScheme.primary,
+                    ),
                     title: Text(
                       'Share with friends',
                       style: Theme.of(context).textTheme.bodyLarge,
@@ -465,7 +487,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const Divider(height: 1, indent: 56),
                   ListTile(
-                    leading: Icon(Icons.mail_outline, color: colorScheme.primary),
+                    leading: Icon(
+                      Icons.mail_outline,
+                      color: colorScheme.primary,
+                    ),
                     title: Text(
                       'Contact developer',
                       style: Theme.of(context).textTheme.bodyLarge,
@@ -487,14 +512,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         if (!launched && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: const Text(
-                                  'sarthiindia2020@gmail.com'),
+                              content: const Text('sarthiindia2020@gmail.com'),
                               action: SnackBarAction(
                                 label: 'Copy',
                                 onPressed: () => Clipboard.setData(
                                   const ClipboardData(
-                                      text:
-                                          'sarthiindia2020@gmail.com'),
+                                    text: 'sarthiindia2020@gmail.com',
+                                  ),
                                 ),
                               ),
                               duration: const Duration(seconds: 5),
@@ -505,14 +529,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: const Text(
-                                  'sarthiindia2020@gmail.com'),
+                              content: const Text('sarthiindia2020@gmail.com'),
                               action: SnackBarAction(
                                 label: 'Copy',
                                 onPressed: () => Clipboard.setData(
                                   const ClipboardData(
-                                      text:
-                                          'sarthiindia2020@gmail.com'),
+                                    text: 'sarthiindia2020@gmail.com',
+                                  ),
                                 ),
                               ),
                               duration: const Duration(seconds: 5),
@@ -590,10 +613,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
@@ -614,9 +635,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     title: Text(
                       'Delete all data',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: colorScheme.error,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: colorScheme.error),
                     ),
                     onTap: () => _confirmDeleteAllData(context, ref),
                   ),
@@ -650,11 +671,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       const SnackBar(content: Text('Test notification sent')),
     );
   }
+
   Future<void> _onNotificationsToggled(bool enabled) async {
     if (enabled) {
       final android = FlutterLocalNotificationsPlugin()
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
       final canSchedule = await android?.canScheduleExactNotifications();
       if (canSchedule == false) {
@@ -709,7 +732,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildThemeModeTile(
-      BuildContext context, WidgetRef ref, ThemeMode themeMode) {
+    BuildContext context,
+    WidgetRef ref,
+    ThemeMode themeMode,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -780,8 +806,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return GestureDetector(
       onTap: () => onTap(value),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(99),
           color: isSelected
@@ -797,11 +822,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 16,
-                color: isSelected
-                    ? colorScheme.primary
-                    : colorScheme.onSurface),
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -809,12 +834,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               softWrap: false,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: isSelected
-                    ? FontWeight.w500
-                    : FontWeight.normal,
-                color: isSelected
-                    ? colorScheme.primary
-                    : colorScheme.onSurface,
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                color: isSelected ? colorScheme.primary : colorScheme.onSurface,
               ),
             ),
           ],
@@ -904,8 +925,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }
@@ -943,13 +964,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               maxLines: 1,
               textAlign: TextAlign.end,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right,
-              size: 20, color: colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ],
       ),
       onTap: onTap,
@@ -957,14 +981,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildActivityTile(
-      BuildContext context, WidgetRef ref, int currentLevel) {
+    BuildContext context,
+    WidgetRef ref,
+    int currentLevel,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     const labels = ['Sedentary', 'Light', 'Moderate', 'Active'];
     return ListTile(
-      leading:
-          Icon(Icons.directions_run_outlined, color: colorScheme.primary),
+      leading: Icon(Icons.directions_run_outlined, color: colorScheme.primary),
       title: Text(
-          'Activity Level', style: Theme.of(context).textTheme.bodyLarge),
+        'Activity Level',
+        style: Theme.of(context).textTheme.bodyLarge,
+      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -974,13 +1002,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right,
-              size: 20, color: colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ],
       ),
       onTap: () => _showActivityDialog(context, ref, currentLevel),
@@ -988,7 +1019,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildWakeTimeTile(
-      BuildContext context, WidgetRef ref, UserProfileModel profile) {
+    BuildContext context,
+    WidgetRef ref,
+    UserProfileModel profile,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(Icons.wb_sunny_outlined, color: colorScheme.primary),
@@ -1002,12 +1036,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right, size: 20, color: colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ],
       ),
       onTap: () => _showAlarmTimePicker(
@@ -1022,7 +1060,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildSleepTimeTile(
-      BuildContext context, WidgetRef ref, UserProfileModel profile) {
+    BuildContext context,
+    WidgetRef ref,
+    UserProfileModel profile,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(Icons.bedtime_outlined, color: colorScheme.primary),
@@ -1036,12 +1077,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right, size: 20, color: colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ],
       ),
       onTap: () => _showAlarmTimePicker(
@@ -1080,18 +1125,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   String _formatTime(int hour, int minute) {
     final period = hour >= 12 ? 'PM' : 'AM';
-    final h = hour == 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    final h = hour == 0
+        ? 12
+        : hour > 12
+        ? hour - 12
+        : hour;
     final m = minute.toString().padLeft(2, '0');
     return '$h:$m $period';
   }
 
   Widget _buildGoalTile(
-      BuildContext context, WidgetRef ref, UserProfileModel profile) {
+    BuildContext context,
+    WidgetRef ref,
+    UserProfileModel profile,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(Icons.flag_outlined, color: colorScheme.primary),
-      title:
-          Text('Daily Goal', style: Theme.of(context).textTheme.bodyLarge),
+      title: Text('Daily Goal', style: Theme.of(context).textTheme.bodyLarge),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1103,13 +1154,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right,
-              size: 20, color: colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ],
       ),
       onTap: () => _showGoalDialog(context, ref, profile),
@@ -1117,11 +1171,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildUnitToggleTile(
-      BuildContext context, WidgetRef ref, String currentUnit) {
+    BuildContext context,
+    WidgetRef ref,
+    String currentUnit,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
-      leading:
-          Icon(Icons.straighten_outlined, color: colorScheme.primary),
+      leading: Icon(Icons.straighten_outlined, color: colorScheme.primary),
       title: Text('Unit', style: Theme.of(context).textTheme.bodyLarge),
       trailing: SegmentedButton<String>(
         segments: const [
@@ -1132,25 +1188,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onSelectionChanged: (val) {
           ref.read(settingsNotifierProvider.notifier).updateUnit(val.first);
         },
-        style: const ButtonStyle(
-          visualDensity: VisualDensity.compact,
-        ),
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
       ),
     );
   }
 
   Widget _buildGoalBreakdownTile(
-      BuildContext context, UserProfileModel profile) {
+    BuildContext context,
+    UserProfileModel profile,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     return ListTile(
       leading: Icon(Icons.calculate_outlined, color: colorScheme.primary),
-      title: Text(
-        'How is this calculated?',
-        style: theme.textTheme.bodyLarge,
+      title: Text('How is this calculated?', style: theme.textTheme.bodyLarge),
+      trailing: Icon(
+        Icons.chevron_right,
+        size: 20,
+        color: colorScheme.onSurfaceVariant,
       ),
-      trailing: Icon(Icons.chevron_right,
-          size: 20, color: colorScheme.onSurfaceVariant),
       onTap: () => _showGoalBreakdown(context, profile),
     );
   }
@@ -1164,19 +1220,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     const activityLabels = ['Sedentary', 'Light', 'Moderate', 'Active'];
     const activityMultipliers = [1.0, 1.1, 1.2, 1.4];
-    final activityMult =
-        activityMultipliers[profile.activityLevel.clamp(0, 3)];
+    final activityMult = activityMultipliers[profile.activityLevel.clamp(0, 3)];
     final afterActivity = base * activityMult;
 
     final genderMult = profile.gender == 'female' ? 0.92 : 1.0;
     final afterGender = afterActivity * genderMult;
 
-    final pregnancyExtraRaw =
-        (profile.isPregnant && profile.gender == 'female')
-            ? (profile.weightKg * 3.5).clamp(0.0, 300.0)
-            : 0.0;
-    final pregnancyExtra =
-        ((pregnancyExtraRaw / 5).round() * 5).toDouble();
+    final pregnancyExtraRaw = (profile.isPregnant && profile.gender == 'female')
+        ? (profile.weightKg * 3.5).clamp(0.0, 300.0)
+        : 0.0;
+    final pregnancyExtra = ((pregnancyExtraRaw / 5).round() * 5).toDouble();
     final afterPregnancy = afterGender + pregnancyExtra;
 
     final climateMults = {
@@ -1245,105 +1298,124 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Your daily goal is based on:',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-              const SizedBox(height: 16),
-              ...[
-                _breakdownRow(context,
-                  '⚖️ Base',
-                  baseFormula,
-                  fmt(base),
-                ),
-                Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
-                _breakdownRow(context,
-                  '🏃 Activity (${activityLabels[profile.activityLevel.clamp(0, 3)]})',
-                  '× ${activityMult.toStringAsFixed(1)}',
-                  fmt(afterActivity),
-                ),
-                Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
-                _breakdownRow(context,
-                  '${profile.gender == 'female' ? '👩' : '👨'} Gender',
-                  profile.gender == 'female'
-                      ? '× 0.92 (female adjustment)'
-                      : '',
-                  profile.gender == 'female' ? fmt(afterGender) : 'No change',
-                ),
-                if (profile.isPregnant && profile.gender == 'female') ...[
-                  Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                const SizedBox(height: 16),
+                ...[
+                  _breakdownRow(context, '⚖️ Base', baseFormula, fmt(base)),
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                  ),
                   _breakdownRow(
                     context,
-                    '🤰 Pregnancy',
-                    unit == 'oz'
-                        ? '+ ${(pregnancyExtra * 0.033814).toStringAsFixed(1)}'
-                          ' fl oz (max 10.1 fl oz)'
-                        : '+ ${pregnancyExtra.toInt()}ml (max 300ml)',
-                    fmt(afterPregnancy),
+                    '🏃 Activity (${activityLabels[profile.activityLevel.clamp(0, 3)]})',
+                    '× ${activityMult.toStringAsFixed(1)}',
+                    fmt(afterActivity),
                   ),
-                ],
-                Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
-                _breakdownRow(context,
-                  '${HydrationCalculator.climateEmoji(profile.climateType)} Climate'
-                  ' (${HydrationCalculator.climateLabel(profile.climateType)})',
-                  '× $climateMult',
-                  fmt(afterClimate),
-                ),
-                if (afterClimate.round() != finalGoal) ...[
-                  Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
-                  _breakdownRow(context,
-                    '📊 Adjusted',
-                    'Based on recommended guidelines for your profile',
-                    fmt(finalGoal.toDouble()),
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.4),
                   ),
-                ],
-              ],
-              const Divider(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    flex: 2,
-                    child: Text(
-                      'Your daily goal',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                  _breakdownRow(
+                    context,
+                    '${profile.gender == 'female' ? '👩' : '👨'} Gender',
+                    profile.gender == 'female'
+                        ? '× 0.92 (female adjustment)'
+                        : '',
+                    profile.gender == 'female' ? fmt(afterGender) : 'No change',
+                  ),
+                  if (profile.isPregnant && profile.gender == 'female') ...[
+                    Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.4),
                     ),
+                    _breakdownRow(
+                      context,
+                      '🤰 Pregnancy',
+                      unit == 'oz'
+                          ? '+ ${(pregnancyExtra * 0.033814).toStringAsFixed(1)}'
+                                ' fl oz (max 10.1 fl oz)'
+                          : '+ ${pregnancyExtra.toInt()}ml (max 300ml)',
+                      fmt(afterPregnancy),
+                    ),
+                  ],
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.4),
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    flex: 3,
-                    child: Text(
+                  _breakdownRow(
+                    context,
+                    '${HydrationCalculator.climateEmoji(profile.climateType)} Climate'
+                        ' (${HydrationCalculator.climateLabel(profile.climateType)})',
+                    '× $climateMult',
+                    fmt(afterClimate),
+                  ),
+                  if (afterClimate.round() != finalGoal) ...[
+                    Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                    ),
+                    _breakdownRow(
+                      context,
+                      '📊 Adjusted',
+                      'Based on recommended guidelines for your profile',
                       fmt(finalGoal.toDouble()),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      textAlign: TextAlign.end,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                    ),
+                  ],
+                ],
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      flex: 2,
+                      child: Text(
+                        'Your daily goal',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      flex: 3,
+                      child: Text(
+                        fmt(finalGoal.toDouble()),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        textAlign: TextAlign.end,
+                        style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: colorScheme.primary),
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'General guideline based on established hydration research. '
+                    'Individual needs vary. Consult a doctor for a personalised recommendation.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text(
-                  'General guideline based on established hydration research. '
-                  'Individual needs vary. Consult a doctor for a personalised recommendation.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: colorScheme.onSurfaceVariant),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
         actions: [
           FilledButton(
@@ -1407,26 +1479,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildReminderIntervalTile(
-      BuildContext context, WidgetRef ref, int currentMinutes) {
+    BuildContext context,
+    WidgetRef ref,
+    UserProfileModel profile,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant);
+
     return ListTile(
       leading: Icon(Icons.timer_outlined, color: colorScheme.primary),
       title: Text(
-          'Remind me every', style: Theme.of(context).textTheme.bodyLarge),
-      subtitle: Text(
-        _formatInterval(currentMinutes),
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
+        'Remind me every',
+        style: Theme.of(context).textTheme.bodyLarge,
       ),
-      trailing:
-          Icon(Icons.chevron_right, size: 20, color: colorScheme.onSurfaceVariant),
-      onTap: () => _showReminderPicker(context, ref, currentMinutes),
+      subtitle: FutureBuilder<ReminderPreview>(
+        future: NotificationService().getReminderPreview(
+          wakeHour: profile.wakeHour,
+          wakeMinute: profile.wakeMinute,
+          sleepHour: profile.sleepHour,
+          sleepMinute: profile.sleepMinute,
+          intervalMinutes: profile.reminderIntervalMinutes,
+          notificationsEnabled: profile.notificationsEnabled,
+        ),
+        builder: (context, snapshot) {
+          final intervalText = _formatInterval(profile.reminderIntervalMinutes);
+          final preview = snapshot.data;
+          if (preview == null) {
+            return Text(
+              '$intervalText\nNext reminder: calculating...',
+              style: textStyle,
+            );
+          }
+
+          return Text(
+            _buildReminderPreviewText(intervalText, preview),
+            style: textStyle,
+          );
+        },
+      ),
+      trailing: Icon(
+        Icons.chevron_right,
+        size: 20,
+        color: colorScheme.onSurfaceVariant,
+      ),
+      onTap: () =>
+          _showReminderPicker(context, ref, profile.reminderIntervalMinutes),
     );
   }
 
   void _showEditNameDialog(
-      BuildContext context, WidgetRef ref, String currentName) {
+    BuildContext context,
+    WidgetRef ref,
+    String currentName,
+  ) {
     final controller = TextEditingController(text: currentName);
     showDialog(
       context: context,
@@ -1512,7 +1619,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showActivityDialog(
-      BuildContext context, WidgetRef ref, int currentLevel) {
+    BuildContext context,
+    WidgetRef ref,
+    int currentLevel,
+  ) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1525,41 +1635,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           width: double.maxFinite,
           child: SingleChildScrollView(
             child: RadioGroup<int>(
-          groupValue: currentLevel,
-          onChanged: (val) {
-            if (val == null) return;
-            Navigator.pop(dialogContext);
-            ref
-                .read(settingsNotifierProvider.notifier)
-                .updateActivityLevel(val);
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<int>(
-                value: 0,
-                title: const Text('Sedentary'),
-                secondary: const Icon(Icons.chair),
+              groupValue: currentLevel,
+              onChanged: (val) {
+                if (val == null) return;
+                Navigator.pop(dialogContext);
+                ref
+                    .read(settingsNotifierProvider.notifier)
+                    .updateActivityLevel(val);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<int>(
+                    value: 0,
+                    title: const Text('Sedentary'),
+                    secondary: const Icon(Icons.chair),
+                  ),
+                  RadioListTile<int>(
+                    value: 1,
+                    title: const Text('Light'),
+                    secondary: const Icon(Icons.directions_walk),
+                  ),
+                  RadioListTile<int>(
+                    value: 2,
+                    title: const Text('Moderate'),
+                    secondary: const Icon(Icons.directions_run),
+                  ),
+                  RadioListTile<int>(
+                    value: 3,
+                    title: const Text('Active'),
+                    secondary: const Icon(Icons.fitness_center),
+                  ),
+                ],
               ),
-              RadioListTile<int>(
-                value: 1,
-                title: const Text('Light'),
-                secondary: const Icon(Icons.directions_walk),
-              ),
-              RadioListTile<int>(
-                value: 2,
-                title: const Text('Moderate'),
-                secondary: const Icon(Icons.directions_run),
-              ),
-              RadioListTile<int>(
-                value: 3,
-                title: const Text('Active'),
-                secondary: const Icon(Icons.fitness_center),
-              ),
-            ],
+            ),
           ),
-        ),
-        ),
         ),
         actions: [
           TextButton(
@@ -1600,23 +1710,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           if (isOz) {
             return ml.toDouble().toWholeOzString();
           }
-          return '${ml.toString().replaceAllMapped(
-          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        )} ml';
+          return '${ml.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} ml';
         }
 
         void startHold(StateSetter setState, int stepMl, bool isAdd) {
-          holdTimer = Timer.periodic(
-            const Duration(milliseconds: 120),
-            (_) {
-              setState(() {
-                currentMl = isAdd
-                    ? (currentMl + stepMl).clamp(minMl, maxMl)
-                    : (currentMl - stepMl).clamp(minMl, maxMl);
-              });
-            },
-          );
+          holdTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+            setState(() {
+              currentMl = isAdd
+                  ? (currentMl + stepMl).clamp(minMl, maxMl)
+                  : (currentMl - stepMl).clamp(minMl, maxMl);
+            });
+          });
         }
 
         void stopHold() {
@@ -1635,8 +1739,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               required bool isAdd,
               required IconData icon,
             }) {
-              final atLimit =
-                  isAdd ? currentMl >= maxMl : currentMl <= minMl;
+              final atLimit = isAdd ? currentMl >= maxMl : currentMl <= minMl;
 
               return GestureDetector(
                 onTap: atLimit
@@ -1659,13 +1762,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: Container(
                     clipBehavior: Clip.hardEdge,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: colorScheme.outlineVariant,
-                      ),
+                      border: Border.all(color: colorScheme.outlineVariant),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -1712,109 +1815,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                    width: double.infinity,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 20),
-                    decoration: BoxDecoration(
-                      color:
-                          colorScheme.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        displayValue(currentMl),
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: colorScheme.primary,
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            displayValue(currentMl),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.primary,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: stepButton(
-                          label: largeLabel,
-                          stepMl: largeStep,
-                          isAdd: false,
-                          icon: Icons.remove_circle_outline,
-                        ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: stepButton(
+                              label: largeLabel,
+                              stepMl: largeStep,
+                              isAdd: false,
+                              icon: Icons.remove_circle_outline,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: stepButton(
+                              label: smallLabel,
+                              stepMl: smallStep,
+                              isAdd: false,
+                              icon: Icons.remove,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: stepButton(
+                              label: smallLabel,
+                              stepMl: smallStep,
+                              isAdd: true,
+                              icon: Icons.add,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: stepButton(
+                              label: largeLabel,
+                              stepMl: largeStep,
+                              isAdd: true,
+                              icon: Icons.add_circle_outline,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: stepButton(
-                          label: smallLabel,
-                          stepMl: smallStep,
-                          isAdd: false,
-                          icon: Icons.remove,
-                        ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              isOz ? '51 oz min' : '1,500 ml min',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          Flexible(
+                            child: Text(
+                              isOz ? '152 oz max' : '4,500 ml max',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: stepButton(
-                          label: smallLabel,
-                          stepMl: smallStep,
-                          isAdd: true,
-                          icon: Icons.add,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: stepButton(
-                          label: largeLabel,
-                          stepMl: largeStep,
-                          isAdd: true,
-                          icon: Icons.add_circle_outline,
+                      const SizedBox(height: 6),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Hold a button to change quickly',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          isOz ? '51 oz min' : '1,500 ml min',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      Flexible(
-                        child: Text(
-                          isOz ? '152 oz max' : '4,500 ml max',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'Hold a button to change quickly',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
               actions: [
                 TextButton(
                   onPressed: () {
@@ -1848,17 +1948,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showReminderPicker(
-      BuildContext context, WidgetRef ref, int currentMinutes) {
+    BuildContext context,
+    WidgetRef ref,
+    int currentMinutes,
+  ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     int selectedHours = (currentMinutes ~/ 60).clamp(0, 8);
     int selectedQuarter = ((currentMinutes % 60) ~/ 15).clamp(0, 3);
 
-    final hourController =
-        FixedExtentScrollController(initialItem: selectedHours);
-    final minuteController =
-        FixedExtentScrollController(initialItem: selectedQuarter);
+    final hourController = FixedExtentScrollController(
+      initialItem: selectedHours,
+    );
+    final minuteController = FixedExtentScrollController(
+      initialItem: selectedQuarter,
+    );
 
     showModalBottomSheet(
       context: context,
@@ -1869,8 +1974,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (ctx, setState) {
-            int totalMinutes() =>
-                selectedHours * 60 + selectedQuarter * 15;
+            int totalMinutes() => selectedHours * 60 + selectedQuarter * 15;
 
             String formatSelected() {
               final t = totalMinutes();
@@ -1884,203 +1988,213 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
             return Container(
               padding: const EdgeInsets.only(
-                  top: 20, left: 24, right: 24, bottom: 24),
+                top: 20,
+                left: 24,
+                right: 24,
+                bottom: 24,
+              ),
               child: SingleChildScrollView(
                 child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Reminder every',
-                            style: theme.textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: colorScheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(dialogContext),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "Remind you to drink when you haven't logged",
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    height: 200,
-                    child: Row(
+                    Row(
                       children: [
-                        // Hours wheel (0–8)
                         Expanded(
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary
-                                      .withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Reminder every',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
                               ),
-                              CupertinoPicker(
-                                scrollController: hourController,
-                                itemExtent: 44,
-                                selectionOverlay: const SizedBox.shrink(),
-                                onSelectedItemChanged: (i) =>
-                                    setState(() => selectedHours = i),
-                                children: List.generate(
-                                  9,
-                                  (i) => Center(
-                                    child: Text(
-                                      '$i hr',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w600,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        // Minutes wheel (:00, :15, :30, :45)
-                        Expanded(
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary
-                                      .withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              CupertinoPicker(
-                                scrollController: minuteController,
-                                itemExtent: 44,
-                                selectionOverlay: const SizedBox.shrink(),
-                                onSelectedItemChanged: (i) =>
-                                    setState(() => selectedQuarter = i),
-                                children: [
-                                  Center(
-                                    child: Text(
-                                      ':00 min',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w600,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  Center(
-                                    child: Text(
-                                      ':15 min',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w600,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  Center(
-                                    child: Text(
-                                      ':30 min',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w600,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  Center(
-                                    child: Text(
-                                      ':45 min',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w600,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(dialogContext),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (totalMinutes() == 0)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
                       child: Text(
-                        'Reminder interval cannot be 0. Choose at least 15 minutes.',
-                        style: TextStyle(
-                          color: colorScheme.error,
-                          fontSize: 12,
+                        "Remind you to drink when you haven't logged",
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    )
-                  else
-                    Text(
-                      'Remind me every ${formatSelected()}',
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: totalMinutes() == 0
-                          ? null
-                          : () {
-                              Navigator.pop(dialogContext);
-                              ref
-                                  .read(settingsNotifierProvider.notifier)
-                                  .updateReminderInterval(totalMinutes());
-                            },
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(
-                        totalMinutes() == 0
-                            ? 'Choose a valid interval'
-                            : 'Confirm — every ${formatSelected()}',
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 200,
+                      child: Row(
+                        children: [
+                          // Hours wheel (0–8)
+                          Expanded(
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                CupertinoPicker(
+                                  scrollController: hourController,
+                                  itemExtent: 44,
+                                  selectionOverlay: const SizedBox.shrink(),
+                                  onSelectedItemChanged: (i) =>
+                                      setState(() => selectedHours = i),
+                                  children: List.generate(
+                                    9,
+                                    (i) => Center(
+                                      child: Text(
+                                        '$i hr',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Minutes wheel (:00, :15, :30, :45)
+                          Expanded(
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                CupertinoPicker(
+                                  scrollController: minuteController,
+                                  itemExtent: 44,
+                                  selectionOverlay: const SizedBox.shrink(),
+                                  onSelectedItemChanged: (i) =>
+                                      setState(() => selectedQuarter = i),
+                                  children: [
+                                    Center(
+                                      child: Text(
+                                        ':00 min',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    Center(
+                                      child: Text(
+                                        ':15 min',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    Center(
+                                      child: Text(
+                                        ':30 min',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    Center(
+                                      child: Text(
+                                        ':45 min',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w600,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 8),
+                    if (totalMinutes() == 0)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          'Reminder interval cannot be 0. Choose at least 15 minutes.',
+                          style: TextStyle(
+                            color: colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      )
+                    else
+                      Text(
+                        'Remind me every ${formatSelected()}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: totalMinutes() == 0
+                            ? null
+                            : () {
+                                Navigator.pop(dialogContext);
+                                ref
+                                    .read(settingsNotifierProvider.notifier)
+                                    .updateReminderInterval(totalMinutes());
+                              },
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          totalMinutes() == 0
+                              ? 'Choose a valid interval'
+                              : 'Confirm — every ${formatSelected()}',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -2096,6 +2210,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final mins = minutes % 60;
     if (mins == 0) return hours == 1 ? '1 hr' : '$hours hrs';
     return '$hours hr $mins min';
+  }
+
+  String _buildReminderPreviewText(
+    String intervalText,
+    ReminderPreview preview,
+  ) {
+    final nextReminderAt = preview.nextReminderAt;
+    if (nextReminderAt == null) {
+      return '$intervalText\nNo reminder scheduled today';
+    }
+
+    final suggestion = preview.targetComplete
+        ? 'Goal complete'
+        : 'Suggested add: ${preview.suggestedAmountMl} ml';
+    return '$intervalText\nNext: ${_formatReminderDateTime(nextReminderAt)} • $suggestion';
+  }
+
+  String _formatReminderDateTime(DateTime dateTime) {
+    final local = dateTime.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(local.year, local.month, local.day);
+    final dayLabel = date == today
+        ? 'Today'
+        : date == today.add(const Duration(days: 1))
+        ? 'Tomorrow'
+        : '${local.day}/${local.month}/${local.year}';
+    return '$dayLabel, ${_formatTime(local.hour, local.minute)}';
   }
 
   Widget _buildSoundToggleTile(BuildContext context) {
@@ -2117,8 +2259,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             await prefs.setBool(AppConstants.prefNotificationSound, val);
             setState(() {});
 
-            final profile =
-                ref.read(settingsNotifierProvider).valueOrNull;
+            final profile = ref.read(settingsNotifierProvider).valueOrNull;
             if (profile == null || !profile.notificationsEnabled) return;
 
             await NotificationService().scheduleReminders(
@@ -2150,7 +2291,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showGenderDialog(
-      BuildContext context, WidgetRef ref, UserProfileModel profile) {
+    BuildContext context,
+    WidgetRef ref,
+    UserProfileModel profile,
+  ) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -2163,59 +2307,67 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           width: double.maxFinite,
           child: SingleChildScrollView(
             child: RadioGroup<String>(
-          groupValue: profile.gender,
-          onChanged: (val) {
-            if (val == null) return;
-            Navigator.pop(dialogContext);
-            ref.read(settingsNotifierProvider.notifier).updateGender(val);
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<String>(
-                value: 'male',
-                title: Row(children: [
-                  const SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: FittedBox(
-                      fit: BoxFit.contain,
-                      child: Text('👨', style: TextStyle(fontSize: 20)),
+              groupValue: profile.gender,
+              onChanged: (val) {
+                if (val == null) return;
+                Navigator.pop(dialogContext);
+                ref.read(settingsNotifierProvider.notifier).updateGender(val);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    value: 'male',
+                    title: Row(
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: Text('👨', style: TextStyle(fontSize: 20)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Male',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            softWrap: false,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const Flexible(
-                    child: Text('Male',
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        softWrap: false),
-                  ),
-                ]),
-              ),
-              RadioListTile<String>(
-                value: 'female',
-                title: Row(children: [
-                  const SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: FittedBox(
-                      fit: BoxFit.contain,
-                      child: Text('👩', style: TextStyle(fontSize: 20)),
+                  RadioListTile<String>(
+                    value: 'female',
+                    title: Row(
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: Text('👩', style: TextStyle(fontSize: 20)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Female',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            softWrap: false,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const Flexible(
-                    child: Text('Female',
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        softWrap: false),
-                  ),
-                ]),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-        ),
         ),
         actions: [
           TextButton(
@@ -2231,7 +2383,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showClimateDialog(
-      BuildContext context, WidgetRef ref, UserProfileModel profile) {
+    BuildContext context,
+    WidgetRef ref,
+    UserProfileModel profile,
+  ) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -2243,106 +2398,122 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
-          child: RadioGroup<String>(
-            groupValue: profile.climateType,
-            onChanged: (val) {
-              if (val == null) return;
-              Navigator.pop(dialogContext);
-              ref
-                  .read(settingsNotifierProvider.notifier)
-                  .updateClimateType(val);
-            },
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                RadioListTile<String>(
-                  value: 'cold',
-                  title: Row(children: [
-                    const SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: Text('🥶', style: TextStyle(fontSize: 20)),
-                      ),
+            child: RadioGroup<String>(
+              groupValue: profile.climateType,
+              onChanged: (val) {
+                if (val == null) return;
+                Navigator.pop(dialogContext);
+                ref
+                    .read(settingsNotifierProvider.notifier)
+                    .updateClimateType(val);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    value: 'cold',
+                    title: Row(
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: Text('🥶', style: TextStyle(fontSize: 20)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Cold',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            softWrap: false,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    const Flexible(
-                      child: Text('Cold',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false),
+                    subtitle: const Text('Cool or cold weather'),
+                  ),
+                  RadioListTile<String>(
+                    value: 'moderate',
+                    title: Row(
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: Text('🌤️', style: TextStyle(fontSize: 20)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Moderate',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            softWrap: false,
+                          ),
+                        ),
+                      ],
                     ),
-                  ]),
-                  subtitle: const Text('Cool or cold weather'),
-                ),
-                RadioListTile<String>(
-                  value: 'moderate',
-                  title: Row(children: [
-                    const SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: Text('🌤️', style: TextStyle(fontSize: 20)),
-                      ),
+                    subtitle: const Text('Mild everyday conditions'),
+                  ),
+                  RadioListTile<String>(
+                    value: 'hot',
+                    title: Row(
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: Text('☀️', style: TextStyle(fontSize: 20)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Hot',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            softWrap: false,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    const Flexible(
-                      child: Text('Moderate',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false),
+                    subtitle: const Text('Warm and sunny weather'),
+                  ),
+                  RadioListTile<String>(
+                    value: 'very_hot',
+                    title: Row(
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: Text('🔥', style: TextStyle(fontSize: 20)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'Very Hot',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            softWrap: false,
+                          ),
+                        ),
+                      ],
                     ),
-                  ]),
-                  subtitle: const Text('Mild everyday conditions'),
-                ),
-                RadioListTile<String>(
-                  value: 'hot',
-                  title: Row(children: [
-                    const SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: Text('☀️', style: TextStyle(fontSize: 20)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Flexible(
-                      child: Text('Hot',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false),
-                    ),
-                  ]),
-                  subtitle: const Text('Warm and sunny weather'),
-                ),
-                RadioListTile<String>(
-                  value: 'very_hot',
-                  title: Row(children: [
-                    const SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: Text('🔥', style: TextStyle(fontSize: 20)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Flexible(
-                      child: Text('Very Hot',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false),
-                    ),
-                  ]),
-                  subtitle: const Text('Hot, humid or desert conditions'),
-                ),
-              ],
+                    subtitle: const Text('Hot, humid or desert conditions'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
         ),
         actions: [
           TextButton(
@@ -2395,8 +2566,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 8),
                 _buildStep(context, '1.', 'Tap "Open settings" below'),
                 const SizedBox(height: 6),
-                _buildStep(context, '2.',
-                    'Find Hydrate Yourself in the list'),
+                _buildStep(context, '2.', 'Find Hydrate Yourself in the list'),
                 const SizedBox(height: 6),
                 _buildStep(context, '3.', "Select \"Don't optimize\""),
                 const SizedBox(height: 16),
@@ -2406,10 +2576,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   'a notification.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -2419,10 +2588,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text('Close'),
-            ),
+            child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Close')),
           ),
           FilledButton(
             onPressed: () async {
@@ -2472,10 +2638,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text('Close'),
-            ),
+            child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Close')),
           ),
         ],
       ),
@@ -2519,8 +2682,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 8),
                 _buildStep(context, '1.', 'Tap "Open settings" below'),
                 const SizedBox(height: 6),
-                _buildStep(context, '2.',
-                    'Enable "Allow setting alarms and reminders"'),
+                _buildStep(
+                  context,
+                  '2.',
+                  'Enable "Allow setting alarms and reminders"',
+                ),
               ],
             ),
           ),
@@ -2528,17 +2694,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text('Close'),
-            ),
+            child: const FittedBox(fit: BoxFit.scaleDown, child: Text('Close')),
           ),
           FilledButton(
             onPressed: () async {
               Navigator.pop(ctx);
               final android = FlutterLocalNotificationsPlugin()
                   .resolvePlatformSpecificImplementation<
-                      AndroidFlutterLocalNotificationsPlugin>();
+                    AndroidFlutterLocalNotificationsPlugin
+                  >();
               await android?.requestExactAlarmsPermission();
             },
             child: const FittedBox(
@@ -2551,8 +2715,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildStep(
-      BuildContext context, String number, String text) {
+  Widget _buildStep(BuildContext context, String number, String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2566,14 +2729,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(height: 1.4),
-          ),
-        ),
+        Expanded(child: Text(text, style: const TextStyle(height: 1.4))),
       ],
     );
   }
 }
-
