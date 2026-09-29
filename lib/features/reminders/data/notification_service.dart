@@ -277,17 +277,18 @@ class NotificationService {
         final dayProgress = _dateKey(day.slots.first.time) == todayKey
             ? progress
             : _TodayProgress(totalMl: 0, goalMl: progress.goalMl);
-        final quickAddAmountMl = _suggestedAmountMl(
-          dayProgress.remainingMl,
-          day.slots.length,
-        );
-        final notificationDetails = _buildNotificationDetails(
-          soundEnabled: soundEnabled,
-          progressPercent: dayProgress.percent,
-          quickAddAmountMl: quickAddAmountMl,
-        );
-
-        for (final slot in day.slots) {
+        for (var slotIndex = 0; slotIndex < day.slots.length; slotIndex++) {
+          final slot = day.slots[slotIndex];
+          final remainingSlots = day.slots.length - slotIndex;
+          final quickAddAmountMl = _suggestedAmountMl(
+            dayProgress.remainingMl,
+            remainingSlots,
+          );
+          final notificationDetails = _buildNotificationDetails(
+            soundEnabled: soundEnabled,
+            progressPercent: dayProgress.percent,
+            quickAddAmountMl: quickAddAmountMl,
+          );
           final regularSlot = slot.time;
           await _plugin.zonedSchedule(
             notificationId,
