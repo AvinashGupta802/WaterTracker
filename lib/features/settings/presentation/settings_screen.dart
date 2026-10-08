@@ -481,7 +481,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       'water intake with smart reminders\n\n '
                       'Download it free on Google Play:\n'
                       'https://play.google.com/store/apps/details'
-                      '?id=com.avinashgupta.watertracker',
+                      '?id=com.ishaansharma.hydrate_yourself',
                       subject: 'Check out Hydrate Yourself',
                     ),
                   ),
@@ -847,7 +847,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _rateApp() async {
     try {
       await InAppReview.instance.openStoreListing(
-        appStoreId: 'com.avinashgupta.watertracker',
+        appStoreId: 'com.ishaansharma.hydrate_yourself',
       );
     } catch (_) {
       if (mounted) {
